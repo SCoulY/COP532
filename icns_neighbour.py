@@ -21,9 +21,9 @@ def send():
 		n.send(nh,msg)
         
 def handler(signum,frame):
-    os.close(uid)
-    n.remove()
-    p.terminate()
+	os.close(uid)    
+	p.terminate()
+	n.remove()
     
 if __name__ == '__main__':
     threads = 2
