@@ -47,10 +47,10 @@ def receive():
 
     
 def send():
-	msg = os.read(uid,100)
-	while msg:
+    msg = os.read(uid,100)
+    while msg:
         signal.signal(signal.SIGINT,handler)
-		n.send(nh,msg)
+        n.send(nh,msg)
         
 def handler(signum,frame):
 #    n.remove()
