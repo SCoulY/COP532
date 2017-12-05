@@ -44,10 +44,12 @@ def receive():
         rec_msg = n.receive()
 #        if rec_msg 
         ui.addline(rec_msg)
+
     
 def send():
 	msg = os.read(uid,100)
-	if msg:
+	while msg:
+        signal.signal(signal.SIGINT,handler)
 		n.send(nh,msg)
         
 def handler(signum,frame):
@@ -67,10 +69,7 @@ if __name__ == '__main__':
     rec_msg = ''
     p = Process(target=receive,args=())
     p.start()
-    while 1:
-#        p.join()
-        signal.signal(signal.SIGINT,handler)
-        send()
+    send()
         
         
 
