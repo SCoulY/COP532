@@ -48,9 +48,12 @@ def receive():
     
 def send():
     msg = os.read(uid,100)
-    while msg:
+    while msg!='/q':
         signal.signal(signal.SIGINT,handler)
         n.send(nh,msg)
+        msg = os.read(uid,100)
+    ui.stop()
+    p.terminate()
         
 def handler(signum,frame):
 #    n.remove()
