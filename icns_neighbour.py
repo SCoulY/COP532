@@ -35,7 +35,7 @@ class reliability:
         ack_data = self.ack + data[1:]  
         n.send(nh,ack_data)
 
-    def set_to_default():
+    # def set_to_default():
 
 class simple_reliability:
     def __init__(self):
@@ -60,6 +60,13 @@ class simple_reliability:
         n.send(nh,ack_data)
         
 
+def is_chinese_str(mystr):
+    #judge if mystr is chinese str
+    for x in mystr:
+        if u'\u4e00' <= x <= u'\u9fff':
+            return True
+        return False
+
 def txt2bit(input_plaintext):
     if is_chinese_str(input_plaintext):
         #every chinese char contains 16 bits
@@ -75,43 +82,48 @@ def txt2bit(input_plaintext):
         num_blocks = len(a)/792 + 1
     return a,num_blocks,chinese 
 
-def receive():
-    while 1:
-        timeout = time.time()+0.2
-        #if a new thread is needed where to calculate timeout or it'll be stuck by n.receive()?
-        rec_msg = n.receive()
-#        if rec_msg 
-        ui.addline(rec_msg)
+# def receive():
+#     while 1:
+#         #timeout = time.time()+0.2
+#         #if a new thread is needed where to calculate timeout or it'll be stuck by n.receive()?
+#         rec_msg = n.receive()
+# #        if rec_msg 
+#         ui.addline(rec_msg)
 
     
-def send():
-    msg = os.read(uid,100)
-    while msg!='/q':
-        signal.signal(signal.SIGINT,handler)
-        n.send(nh,msg)
-        msg = os.read(uid,100)
-    ui.stop()
-    p.terminate()
+# def send():
+#     msg = os.read(uid,100)
+#     while msg!='/q':
+#         signal.signal(signal.SIGINT,handler)
+#         n.send(nh,msg)
+#         msg = os.read(uid,100)
+#     ui.stop()
+#     p.terminate()
         
-def handler(signum,frame):
-#    n.remove()
-    ui.stop()
-    p.terminate()
+# def handler(signum,frame):
+# #    n.remove()
+#     ui.stop()
+#     p.terminate()
         
     
 if __name__ == '__main__':
-    threads = 2
-    netnumber = int(sys.argv[1])
-    neighbour = sys.argv[2].split(":")
-    n = icns.Network(netnumber)
-    nh=n.add_neighbour(neighbour[0],int(neighbour[1]))
-    ui = icns.UI('Chat room')
-    uid = ui.getfd()
-    rec_msg = ''
-    p = Process(target=receive,args=())
-    p.start()
-    send()
-        
+    # threads = 2
+    # netnumber = int(sys.argv[1])
+    # neighbour = sys.argv[2].split(":")
+    # n = icns.Network(netnumber)
+    # nh=n.add_neighbour(neighbour[0],int(neighbour[1]))
+    # ui = icns.UI('Chat room')
+    # uid = ui.getfd()
+    # rec_msg = ''
+    # p = Process(target=receive,args=())
+    # p.start()
+    # send()
+    sample = simple_reliability()
+    data = 'hello'
+    data,blocks,chinese = txt2bit(data)
+    binary = sample.encapsulate(data)
+
+    print binary
         
 
 
