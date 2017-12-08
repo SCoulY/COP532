@@ -1,21 +1,7 @@
-from icns import Network, UI, FD_READY, NET_READY
+from icns import Network, UI, FD_READY, NET_READY, TIMEOUT
 import sys, os,signal, random, binascii, struct, time
 
-if len(sys.argv) < 3:
-    print "not gonna work"
-    sys.exit()
-else:
-    x = UI("test")
-    num = int(sys.argv[1])
-    neighbour = sys.argv[2].split(":")
-    n1 = Network(num)
-    n = n1.add_neighbour(neighbour[0],int(neighbour[1]))
 
-going = True
-fd = x.getfd()
-send_data = False
-ack = 0
-start_time=time.time()
 
 class simple_reliability:
     def __init__(self):
@@ -62,48 +48,69 @@ def txt2bit(input_text):
     return a,num_packets,chinese
 
 #def control_strategy():
+if len(sys.argv) < 3:
+    print "not gonna work"
+    sys.exit()
+else:
+    x = UI("test")
+    num = int(sys.argv[1])
+    neighbour = sys.argv[2].split(":")
+    n1 = Network(num, droprate=0.5)
+    n = n1.add_neighbour(neighbour[0],int(neighbour[1]))
+
+going = True
+fd = x.getfd()
+send_data = False
+tries = 0
 
 while going:
+    
     signal.signal(signal.SIGINT,handler)
-    r= n1.orfd(fd)
+    r= n1.orfd(fd,timeout=0.5)
+    if send_data != False and r == TIMEOUT: #if packet state exist
+        if tries<5:
+            x.addline('resend')
+            n1.send(n,send_data)
+            start_time = time.time()
+            tries += 1
 
     if r == FD_READY:
-        if send_data: #if packet state exist
-            if time.time()>= start_time+0.2 and tries<=5:
-                n1.send(n,send_data)
-                start_time = time.time()
-                tries += 1
-        else:
-            line = os.read(fd,100)
-            x.addline('your msg:'+line)
-            reliability = simple_reliability()
-            data,num_packets,chinese = txt2bit(line)
-            binary_header,encapsulate_data = reliability.encapsulate(data)
-            x.addline('header:'+binary_header)
-            packed_header = struct.pack('B',int(binary_header,2))
-            send_data = packed_header+line
-            n1.send(n,send_data)
+        x.addline('FD')
+        line = os.read(fd,100)
+        x.addline('your msg:'+line)
+        reliability = simple_reliability()
+        data,num_packets,chinese = txt2bit(line)
+        binary_header,encapsulate_data = reliability.encapsulate(data)
+        x.addline('header:'+binary_header)
+        packed_header = struct.pack('B',int(binary_header,2))
+        send_data = packed_header+line
+    
+        n1.send(n,send_data)
 
-            start_time = time.time()
-            tries = 0
-            x.addline('encapsulate_data:'+send_data)
-            if line == '/q':
-                going = False
+        start_time = time.time()
+        tries = 0
+        x.addline('encapsulate_data:'+send_data)
+        if line == '/q':
+	    going = False
 
-    elif r == NET_READY:
+    if r == NET_READY:
+        x.addline('net')
         line,source = n1.receive()
         x.addline('them:'+line)
         up = struct.unpack('B',line[:1])
         header = bin(up[0])[2:].zfill(8)
-        x.addline('recived header:'+header)
-        ack = header[0]
-        if ack:
+        ack = int(header[0])
+        if ack == 1:
             send_data = False #drop data
-            start_time = time.time() #reset timer
+            # start_time = time.time() #reset timer
+	    tries = 0
+            # x.addline('recived header:'+header)
+            # ack = header[0]
+            # x.addline('recived ack:'+ack)
         else: #send ack_packet
-            ack_header = '1' + bin(header)[1:]
+            ack_header = '1' + header[1:]
+            x.addline('recived ack_header:'+ack_header)
             ack_packet=struct.pack('B',int(ack_header,2))+line[1:]
-            ack = 1
             n1.send(n,ack_packet)
 
 
