@@ -1,5 +1,5 @@
 from icns import Network, UI, FD_READY, NET_READY
-import sys, os,signal, random, binascii, struct
+import sys, os,signal, random, binascii, struct, time
 
 class simple_reliability:
     def __init__(self):
@@ -59,28 +59,57 @@ def control_strategy():
 
 	going = True
 	fd = x.getfd()
-
+	send_data = False
+	ack = 0
+	start_time=time.time()
+	
 	while going:
 		signal.signal(signal.SIGINT,handler)
 		r= n1.orfd(fd)
+        
 		if r == FD_READY:
-			line = os.read(fd,100)
-			x.addline('your msg:'+line)
-			reliability = simple_reliability()
-			data,num_packets,chinese = txt2bit(line)
-			binary_header,encapsulate_data = reliability.encapsulate(data)
-			x.addline('header:'+binary_header)
-			packed_header = struct.pack('B',int(binary_header,2))
-			send_data = packed_header+line
-			n1.send(n,send_data)
-			x.addline('encapsulate_data:'+send_data)
-			if line == '/q':
-				going = False
+			if send_data: #if packet state exist
+				if time.time()>= start_time+0.2 and tries<=5:
+					n1.send(n,send_data)
+					start_time = time.time()
+					tries += 1
+			else:        
+				line = os.read(fd,100)
+                x.addline('your msg:'+line)
+                reliability = simple_reliability()
+                data,num_packets,chinese = txt2bit(line)
+                binary_header,encapsulate_data = reliability.encapsulate(data)
+                x.addline('header:'+binary_header)
+                packed_header = struct.pack('B',int(binary_header,2))
+                send_data = packed_header+line
+                n1.send(n,send_data)
+
+                start_time = time.time()
+                tries = 0
+                x.addline('encapsulate_data:'+send_data)
+                if line == '/q':
+                    going = False
+
+                    
+                
+                
+                
 		elif r == NET_READY:
 			line,source = n1.receive()
 			x.addline('them:'+line)
 			up = struct.unpack('B',line[:1])
-			X.addline('recived header:'+bin(up[0])[2:].zfill(8))
+			header = bin(up[0])[2:].zfill(8)
+			X.addline('recived header:'+header)
+			ack = header[0]
+			if ack:
+				send_data = False #drop data
+				start_time = time.time() #reset timer
+			else: #send ack_packet
+				ack_header = '1' + bin(header)[1:]
+				ack_packet=struct.pack('B',int(ack_header,2))+line[1:]
+				ack = 1
+				n1.send(n,ack_packet) 
+            
 	x.stop()
 
 if __name__ == '__main__':
