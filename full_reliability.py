@@ -169,10 +169,11 @@ def control_strategy():
         if r == NET_READY:
             x.addline('net')
             line,source = n1.receive()
+            header = reliability.decapsulate(line)
             #x.addline('them:'+line)
             # up = struct.unpack('B',line[0])
             # header = bin(up[0])[2:].zfill(8)
-            # newid = header[1:8]
+            newid = header[8:16]
             # x.addline('New ID: ' + newid)
 
             if newid not in reliability.msg_id_list:
@@ -180,7 +181,7 @@ def control_strategy():
                 reliability.msg_id_list.append(newid)
 
             x.addline(reliability.msg_id_list)
-            header = reliability.decapsulate(line)
+            
             ack = header[0]
             end = header[1]
             if ack == '1':
