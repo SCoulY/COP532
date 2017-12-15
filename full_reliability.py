@@ -77,7 +77,7 @@ class Full_reliability:
         return decapsulate_header
 
     def send_ack(self,data,nh,n):
-        newheader = struct.pack('B',struct.unpack(data[0])[0]+128)
+        newheader = struct.pack('B',struct.unpack('B',data[0])[0]+128)
         ack_data = newheader + data[1:]
         n.send(nh,ack_data)
 
@@ -135,11 +135,11 @@ def control_strategy():
 
         if r == FD_READY:
             x.addline('FD')
-            line = os.read(fd,100)
+            line = os.read(fd,1000)
 
             packet_list = reliability.encapsulate(line)
 
-            
+
             for send_pack in packet_list:
                 n1.send(n,send_pack)
                 tries = 0
@@ -164,7 +164,7 @@ def control_strategy():
 
             ack = header[0]
             end = header[1]
-            x.addline(header[:8]+'###')
+            x.addline('received ack:'+header[:8]+'###')
             if ack == '1':
                 send_data = False #drop data
                 tries = 0
