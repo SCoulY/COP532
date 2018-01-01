@@ -24,34 +24,35 @@ class simple_reliability:
         n.send(nh,ack_data)
 
 class Forwarding:
-    def __init__(self,data):
+    def __init__(self):
         self.next_hop_dict = {3:3,9:9,'Defalut':11}
-        self.lookup_dict = {3:'n1',11:'n2',9:'n3'}
-        self.reversed_lookup_dict = {'n1':3,'n2':11,'n3':9}
+        self.lookup_dict = {3:'131.231.114.82:1',11:'n2',9:'n3'}
+        self.reversed_lookup_dict = {'131.231.114.82:1':3,'n2':11,'n3':9}
 
-    def next_hop(self,host_num):
-        if int(self.data[8:12],2) == host_num:
+    def next_hop(self,dest):
+        if 2 == dest:
             return False
         else:
-            return self.next_hop_dict[int(data[12:16],2)]
+            return self.next_hop_dict[dest]
+
+    def lookup(self,neighbour_num):
+        #if neighbour == '131.231.115.27:1':
+            #neighbour_name = 'n2' #left handside host 
+        neighbour_addr = self.lookup_dict[neighbour_num]
+        return neighbour_addr
 
 
-    def lookup(self):
-        global neighbour
-        if neighbour == '131.231.115.27:2':
-            neighbour_name = 'n1'
-        return self.reversed_lookup_dict[neighbour_name]
-
-    def encapsulate(self,data):
+    def encapsulate(self,dest,data):
         global host_num
-        next = next_hop(data,host_num)
-        return bin(host_num)[2:].zfill(4) + bin(host_num)[2:].zfill(4) + data
+        next = self.next_hop(dest)
+        return bin(host_num)[2:].zfill(4) + bin(next)[2:].zfill(4) + data
 
 
 class Full_reliability:
     def __init__(self):
         self.ack = '0'
         self.packetidlist = range(256)
+        self.unique_id_list = []
         self.msg_id_list = []
         self.total_package_list = []
 
@@ -59,21 +60,22 @@ class Full_reliability:
         packetid = random.choice(list(set(self.packetidlist)-set(self.msg_id_list)))
         Msgid_header = struct.pack('B',packetid)
         num_packets,len_of_last_msg = self.segmentation(data)
-        len_header = struct.pack('B',len_of_last_msg)
+        #len_header = struct.pack('B',len_of_last_msg)
         for i in range(num_packets):
-            current_data = data[:96]
+            current_data = data[:97]
             seq_header = struct.pack('B',i)
             if i != num_packets-1:
                 flag_header = struct.pack('B',0) #end flag == 0
             else:
                 flag_header = struct.pack('B',64) #end flag == 1
-            self.total_package_list.append(flag_header+Msgid_header+seq_header+len_header+current_data)
-            data = data[96:]
+            self.total_package_list.append(flag_header+Msgid_header+seq_header+current_data)
+            data = data[97:]
         self.msg_id_list.append(bin(packetid)[2:].zfill(8))
+        self.unique_id_list.append(bin(packetid)[2:].zfill(8)+bin(i)[2:].zfill(8))
         return self.total_package_list
 
     def decapsulate(self,data):
-        decapsulate_header = bin(struct.unpack('B',data[0])[0])[2:].zfill(8) + bin(struct.unpack('B',data[1])[0])[2:].zfill(8) + bin(struct.unpack('B',data[2])[0])[2:].zfill(8) + bin(struct.unpack('B',data[3])[0])[2:].zfill(8)
+        decapsulate_header = bin(struct.unpack('B',data[0])[0])[2:].zfill(8) + bin(struct.unpack('B',data[1])[0])[2:].zfill(8) + bin(struct.unpack('B',data[2])[0])[2:].zfill(8) 
         return decapsulate_header
 
     def send_ack(self,data,nh,n):
@@ -82,7 +84,7 @@ class Full_reliability:
         n.send(nh,ack_data)
 
     def segmentation(self,data):
-        if len(data)%96 == 0:
+        if len(data)%96 == 0:  #need modification
             num_packets = len(data)/96
             len_of_last_msg = 0
         else:
@@ -111,13 +113,17 @@ def control_strategy():
         global x
         x = UI("test")
         num = int(sys.argv[1])
-        neighbour = sys.argv[2].split(":")
-        n1 = Network(num, droprate=0.5, corruptrate=0)
-        n = n1.add_neighbour(neighbour[0],int(neighbour[1]))
+        Dest = sys.argv[2].split(":")
+        my_host = Network(num, droprate=0.2, corruptrate=0)
+        forwarding = Forwarding()
+        next = forwarding.reversed_lookup_dict[sys.argv[2]]
+        next = forwarding.next_hop(next)
+        addr,port = Dest[0],Dest[1]
+        n = my_host.add_neighbour(addr,int(port))
 
     going = True
     fd = x.getfd()
-    send_data = False
+    send_data = {}
     tries = 0
     global host_num
     host_num = 2
@@ -126,54 +132,66 @@ def control_strategy():
 
     while going:
         signal.signal(signal.SIGINT,handler)
-        r= n1.orfd(fd,timeout=0.2)
-        if send_data!=False  and r == TIMEOUT: #if packet state exist
+        r= my_host.orfd(fd,timeout=0.2)
+        if send_data!={}  and r == TIMEOUT: #if packet state exist
             if tries<5:
                 x.addline('Packet send failed... resent')
-                n1.send(n,send_data)
+                for key in send_data.keys():
+                    checksum_data = forwarding.encapsulate(next,send_data[key]) 
+                    my_host.send(n,checksum_data)
                 tries += 1
 
         if r == FD_READY:
             x.addline('FD')
-            line = os.read(fd,1000)
+            line = os.read(fd,300)
 
             packet_list = reliability.encapsulate(line)
 
 
             for send_pack in packet_list:
-                n1.send(n,send_pack)
+                checksum_data = forwarding.encapsulate(next,send_pack)
+                my_host.send(n,checksum_data)
                 tries = 0
-
+                unique_id = bin(struct.unpack('B',send_pack[2])[0])[2:].zfill(8) + bin(struct.unpack('B',send_pack[3])[0])[2:].zfill(8)
+                send_data.update({unique_id:send_pack})
                 if line == '/q':
 	            	going = False
 
-            send_data = send_pack
+            
 
         if r == NET_READY:
             x.addline('net')
             line,source = n1.receive()
             header = reliability.decapsulate(line)
 
-            newid = header[8:16]
-            # x.addline('New ID: ' + newid)
+            ack = header[8]
+            end = header[9]
+            
+            dest_host = int(header[4:8],2)
+            unique_id = header[16:32]
 
-            if newid not in reliability.msg_id_list:
-                #x.addline(newid)
+            if ack!='1' and unique_id not in reliability.unique_id_list:
                 x.addline('them:'+line[4:])
-                reliability.msg_id_list.append(newid)
+                reliability.unique_id_list.append(unique_id)
 
-            ack = header[0]
-            end = header[1]
-            x.addline('received ack:'+header[:8]+'###')
+            x.addline('received ack:'+header[8:16]+'###')
             if ack == '1':
-                send_data = False #drop data
+                send_data.pop(unique_id) #drop data
                 tries = 0
                 if end == '1':
+                    reliability.unique_id_list = []
                     reliability.msg_id_list = []
                     reliability.total_package_list = []
             else: #send ack_packet
-                reliability.send_ack(line,n,n1)
+                reliability.send_ack(line,n,my_host)
                 x.addline('sent ack')
+            if dest_host != host_num:
+                next = forwarding.next_hop(dest_host)
+                if next != False:
+                    neighbour_addr = forwarding.lookup(next)
+                    addr,port = neighbour_addr.split()
+                    n = my_host.add_neighbour(addr,int(port)) 
+                my_host.send(n,line)
 
 
 #x.stop()
