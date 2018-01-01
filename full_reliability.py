@@ -45,7 +45,7 @@ class Forwarding:
     def encapsulate(self,dest,data):
         global host_num
         next = self.next_hop(dest)
-        return bin(host_num)[2:].zfill(4) + bin(next)[2:].zfill(4) + data
+        return struct.pack('B',host_num<<4+next) + data
 
 
 class Full_reliability:
@@ -75,7 +75,7 @@ class Full_reliability:
         return self.total_package_list
 
     def decapsulate(self,data):
-        decapsulate_header = bin(struct.unpack('B',data[0])[0])[2:].zfill(8) + bin(struct.unpack('B',data[1])[0])[2:].zfill(8) + bin(struct.unpack('B',data[2])[0])[2:].zfill(8) 
+        decapsulate_header = bin(struct.unpack('B',data[0])[0])[2:].zfill(8)+bin(struct.unpack('B',data[1])[0])[2:].zfill(8) + bin(struct.unpack('B',data[2])[0])[2:].zfill(8) + bin(struct.unpack('B',data[3])[0])[2:].zfill(8) 
         return decapsulate_header
 
     def send_ack(self,data,nh,n):
