@@ -30,14 +30,15 @@ class Checksum:
         self.len_header = 0
 
     def cal_checksum_header(self,data,len_of_last_msg): #now data should have a mixed header of 4 bytes and 94 bytes original data
+        self.sum = 0
         for byte in data:
             self.sum = self.sum + struct.unpack('B',byte)[0]
         self.check_header = self.sum%256
         self.len_header = len_of_last_msg
-        return struct.pack('B',self.check_header) + struct.pack('B'+self.len_header)
+        return struct.pack('B',self.check_header) + struct.pack('B',self.len_header)
 
     def encapsulate(self,data,len_of_last_msg):
-        return cal_checksum_header(data,len_of_last_msg)+data
+        return self.cal_checksum_header(data,len_of_last_msg) + data
 
     def decapsulate(self,data):
         checksumheader = bin(struct.unpack('B',data[0])[0])[2:].zfill(8) + bin(struct.unpack('B',data[1])[0])[2:].zfill(8)
@@ -81,6 +82,7 @@ class Full_reliability:
 
 
     def encapsulate(self,data):
+        self.total_package_list = []
         packetid = random.choice(list(set(self.packetidlist)-set(self.msg_id_list)))
         Msgid_header = struct.pack('B',packetid)
         num_packets,len_of_last_msg = self.segmentation(data)
@@ -104,9 +106,8 @@ class Full_reliability:
 
     def send_ack(self,data,nh,n,dest):
         global host_num
-        newheader = struct.pack('B',struct.unpack('B',data[1])[0]+128)
-        newsender = struct.pack('B',(host_num<<4)+dest)
-        ack_data = newsender  + newheader + data[2:]
+        newheader = struct.pack('B',struct.unpack('B',data[3])[0]+128)
+        ack_data = data[:3] + newheader + data[4:]
         n.send(nh,ack_data)
 
     def segmentation(self,data):
@@ -115,7 +116,7 @@ class Full_reliability:
             len_of_last_msg = 0
         else:
             num_packets = len(data)/94+1
-            len_of_last_msg = len(data)//94
+            len_of_last_msg = len(data)%94
         return num_packets,len_of_last_msg
 
 
@@ -128,7 +129,7 @@ def is_chinese_str(mystr):
     for x in mystr:
         if u'\u4e00' <= x <= u'\u9fff':
             return True
-        return False
+        return Falseprint(str(struct.unpack('B',total_data[0])[0])+' '+str(struct.unpack('B',total_data[1])[0]))
 
 
 def control_strategy():
@@ -166,7 +167,7 @@ def control_strategy():
                 x.addline('Packet send failed... resent')
                 for key in send_data.keys():
                     checksum_data = forwarding.encapsulate(Dest,send_data[key])
-                    total_data = checksum.encapsulate(data,len_of_last_msg)
+                    total_data = checksum.encapsulate(checksum_data,len_of_last_msg)
                     my_host.send(n,total_data)
                 tries += 1
 
@@ -176,8 +177,12 @@ def control_strategy():
 
             packet_list,len_of_last_msg = reliability.encapsulate(line)
             for send_pack in packet_list:
+                if len(send_pack) == 97:
+                    len_of_msg = 100
+                else:
+                    len_of_msg = len_of_last_msg
                 checksum_data = forwarding.encapsulate(Dest,send_pack)
-                total_data = checksum.encapsulate(data,len_of_last_msg)
+                total_data = checksum.encapsulate(checksum_data,len_of_msg)
                 my_host.send(n,total_data)
                 tries = 0
                 unique_id = bin(struct.unpack('B',send_pack[1])[0])[2:].zfill(8) + bin(struct.unpack('B',send_pack[2])[0])[2:].zfill(8)
@@ -189,14 +194,14 @@ def control_strategy():
         if r == NET_READY:
             x.addline('net')
             line,source = my_host.receive()
-            header = checksum.decapsulate(line[:2]) + forwarding.decapsulate(line[2])+reliability.decapsulate(line[3:5])
+            header = checksum.decapsulate(line[:2]) + forwarding.decapsulate(line[2])+reliability.decapsulate(line[3:6])
 
             ack = header[24]
             end = header[25]
 
             len_last_pack = int(header[8:16],2)
 
-            source_host = int(header[:20],2)
+            source_host = int(header[16:20],2)
             dest_host = int(header[20:24],2)
             unique_id = header[32:48]
 
@@ -222,7 +227,11 @@ def control_strategy():
                         reliability.total_package_list = []
                 else: #send ack_packet
                     #compute new sum and compared with checksum
-                    new_sum = checksum.cal_checksum_header(line[2:],len_last_pack)[0]
+                    if end != '1':
+                        new_sum = checksum.cal_checksum_header(line[2:],len_last_pack)[0]
+                    else:
+                        new_sum = checksum.cal_checksum_header(line[2:6+len_last_pack],len_last_pack)[0]
+
                     if new_sum == line[0]: #no corruption
                         reliability.send_ack(line,n,my_host,source_host)
                         x.addline('sent ack')
