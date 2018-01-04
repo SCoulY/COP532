@@ -104,7 +104,7 @@ class Full_reliability:
         decapsulate_header = bin(struct.unpack('B',data[0])[0])[2:].zfill(8) + bin(struct.unpack('B',data[1])[0])[2:].zfill(8) + bin(struct.unpack('B',data[2])[0])[2:].zfill(8)
         return decapsulate_header
 
-    def send_ack(self,data,nh,n,dest):
+    def send_ack(self,data,nh,n):
         newheader = struct.pack('B',struct.unpack('B',data[3])[0]+128)
         ack_data = data[:3] + newheader + data[4:]
         n.send(nh,ack_data)
@@ -243,7 +243,7 @@ def control_strategy():
                         reliability.msg_id_list = []
                         reliability.total_package_list = []
                 else: #send ack_packet
-                    reliability.send_ack(line,n,my_host,source_host)
+                    reliability.send_ack(line,n,my_host)
                     x.addline('sent ack')
 
 
