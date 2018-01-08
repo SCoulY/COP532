@@ -31,7 +31,7 @@ class Checksum:
 
     def cal_checksum_header(self,data,len_of_last_msg): #now data should have a mixed header of 4 bytes and 94 bytes original data
         self.sum = 0
-        for byte in data:
+        for byte in data[4:]:
             self.sum = self.sum + struct.unpack('B',byte)[0]
         self.check_header = self.sum%256
         self.len_header = len_of_last_msg
@@ -104,9 +104,11 @@ class Full_reliability:
         decapsulate_header = bin(struct.unpack('B',data[0])[0])[2:].zfill(8) + bin(struct.unpack('B',data[1])[0])[2:].zfill(8) + bin(struct.unpack('B',data[2])[0])[2:].zfill(8)
         return decapsulate_header
 
-    def send_ack(self,data,nh,n):
+    def send_ack(self,data,nh,n,dest):
+        global host_num
         newheader = struct.pack('B',struct.unpack('B',data[3])[0]+128)
-        ack_data = data[:3] + newheader + data[4:]
+        newsender = struct.pack('B',(host_num<<4)+dest)
+        ack_data = data[:2] + newsender + newheader + data[4:]
         n.send(nh,ack_data)
 
     def segmentation(self,data):
@@ -140,7 +142,7 @@ def control_strategy():
         x = UI("test")
         num = int(sys.argv[1])
         #Dest = sys.argv[2].split(":")
-        my_host = Network(num, droprate=0.2, corruptrate=0.01)
+        my_host = Network(num, droprate=0, corruptrate=0)
         forwarding = Forwarding()
         #next = forwarding.reversed_lookup_dict[sys.argv[2]]
         #next = forwarding.next_hop(next)
@@ -160,7 +162,7 @@ def control_strategy():
 
     while going:
         signal.signal(signal.SIGINT,handler)
-        r= my_host.orfd(fd,timeout=0.2)
+        r= my_host.orfd(fd,timeout=0.5)
         if send_data!={}  and r == TIMEOUT: #if packet state exist
             if tries<5:
                 x.addline('Packet send failed... resent')
@@ -208,10 +210,10 @@ def control_strategy():
 
 
             if source_host != host_num and dest_host != host_num:
-                if ack == '1':
-                    next = forwarding.next_hop(source_host)
-                else:
-                    next = forwarding.next_hop(dest_host)
+                # if ack == '1':
+                #     next = forwarding.next_hop(source_host)
+                # else:
+                next = forwarding.next_hop(dest_host)
                 if next != False:
                     neighbour_addr = forwarding.lookup(next)
                     addr,port = neighbour_addr.split(':')
@@ -243,7 +245,7 @@ def control_strategy():
                         reliability.msg_id_list = []
                         reliability.total_package_list = []
                 else: #send ack_packet
-                    reliability.send_ack(line,n,my_host)
+                    reliability.send_ack(line,n,my_host,source_host)
                     x.addline('sent ack')
 
 
