@@ -186,7 +186,7 @@ def control_strategy():
                 msg_dict = {}
 
         if r == FD_READY:
-            x.addline('FD')
+            #x.addline('FD')
             line = os.read(fd,300)
 
             packet_list,len_of_last_msg = reliability.encapsulate(line)
@@ -202,7 +202,7 @@ def control_strategy():
 	            	going = False
 
         if r == NET_READY:
-            x.addline('NET')
+            #x.addline('NET')
             line,source = my_host.receive()
             header = checksum.decapsulate(line[:2]) + forwarding.decapsulate(line[2]) + reliability.decapsulate(line[3:6]) #scrap the header from received msg
 
@@ -258,7 +258,7 @@ def control_strategy():
                             msg_dict.update({0:line[6:6+len_msg]})
                         reliability.unique_id_list.append(unique_id)
 
-                x.addline('received ack:'+header[24:32]+'###')
+                #x.addline('received ack:'+header[24:32]+'###')
                 if ack == '1':
                     if unique_id in send_data.keys():
                         send_data.pop(unique_id) #drop data
@@ -269,6 +269,6 @@ def control_strategy():
                         reliability.total_package_list = []
                 else: #send ack_packet
                     reliability.send_ack(line,n,my_host,source_host)
-                    x.addline('sent ack')
+                    #x.addline('sent ack')
 
 control_strategy()
