@@ -142,7 +142,7 @@ def control_strategy():
         x = UI("test")
         num = int(sys.argv[1])
         #Dest = sys.argv[2].split(":")
-        my_host = Network(num, droprate=0, corruptrate=0)
+        my_host = Network(num, droprate=0.2, corruptrate=0)
         forwarding = Forwarding()
         #next = forwarding.reversed_lookup_dict[sys.argv[2]]
         #next = forwarding.next_hop(next)
@@ -159,6 +159,7 @@ def control_strategy():
     host_num = 3
     reliability = Full_reliability()
     checksum = Checksum()
+    msg_dict={}
 
     while going:
         signal.signal(signal.SIGINT,handler)
@@ -173,9 +174,10 @@ def control_strategy():
                 tries += 1
             else:#resent more than 5 times
                 send_data = {}
+                msg_dict ={}
 
         if r == FD_READY:
-            x.addline('FD')
+            #x.addline('FD')
             line = os.read(fd,300)
 
             packet_list,len_of_last_msg = reliability.encapsulate(line)
@@ -195,13 +197,13 @@ def control_strategy():
 
 
         if r == NET_READY:
-            x.addline('net')
+            #x.addline('net')
             line,source = my_host.receive()
             header = checksum.decapsulate(line[:2]) + forwarding.decapsulate(line[2])+reliability.decapsulate(line[3:6])
 
             ack = header[24]
             end = header[25]
-
+            seq = int(header[40:48],2)
             len_msg = int(header[8:16],2)
 
             source_host = int(header[16:20],2)
@@ -232,10 +234,19 @@ def control_strategy():
                         x.addline('Corrupted data!')
                         continue
                     else:
-                        x.addline('them:'+line[6:6+len_msg])
+                        if end == '1':
+                            msg_dict.update({1:line[6:6+len_msg]})
+                            if seq == 0:
+                                x.addline('them:'+msg_dict[1])
+                            else:
+                                if len(msg_dict)==2:
+                                    x.addline('them:'+ msg_dict[0] + msg_dict[1])
+                                    msg_dict={}
+                        else:
+                            msg_dict.update({0:line[6:6+len_msg]})
                         reliability.unique_id_list.append(unique_id)
 
-                x.addline('received ack:'+header[24:32]+'###')
+                #x.addline('received ack:'+header[24:32]+'###')
                 if ack == '1':
                     if unique_id in send_data.keys():
                         send_data.pop(unique_id) #drop data
@@ -246,7 +257,7 @@ def control_strategy():
                         reliability.total_package_list = []
                 else: #send ack_packet
                     reliability.send_ack(line,n,my_host,source_host)
-                    x.addline('sent ack')
+                    #x.addline('sent ack')
 
 
 #x.stop()
