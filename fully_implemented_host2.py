@@ -46,8 +46,8 @@ class Checksum:
 
 class Forwarding:
     def __init__(self): #each host maintains different next_hop dict
-        self.next_hop_dict = {3:3,9:9,11:11,'Defalut':11}
-        self.lookup_dict = {3:'131.231.114.82:1',9:'131.231.115.80:1',11:'131.231.114.30:3'}
+        self.next_hop_dict = {3:3,9:9,11:11,'Default':11}
+        self.lookup_dict = {3:'131.231.114.82:1',9:'131.231.115.169:1',11:'131.231.114.104:1'}
         self.reversed_lookup_dict = {'n2':3,'n1':9,'n3':11}
 
     def next_hop(self,dest): #for host 2 if the dest is not himself then lookup in the next_hop_dict
@@ -57,7 +57,7 @@ class Forwarding:
             else:
                 return self.next_hop_dict[dest]
         else:
-            return False
+            return self.next_hop_dict['Default']
 
     def lookup(self,neighbour_num): #convert host_num to ip addr and port num
         neighbour_addr = self.lookup_dict[neighbour_num]
@@ -151,16 +151,16 @@ def control_strategy():
         #next = forwarding.reversed_lookup_dict[sys.argv[2]]
         next = forwarding.next_hop(Dest)
         #add all the neighbours
-        n1 = my_host.add_neighbour('131.231.115.80',1)
+        n1 = my_host.add_neighbour('131.231.115.169',1)
         n2 = my_host.add_neighbour('131.231.114.82',1)
-        n3 = my_host.add_neighbour('131.231.114.30',3)
+        n3 = my_host.add_neighbour('131.231.114.104',1)
         if next: #if dest is not this host and dest is an exist neighbour in the dict
             neighbour_addr = forwarding.lookup(next)
             if neighbour_addr == '131.231.114.82:1':
                 n = n2
-            elif neighbour_addr == '131.231.115.80:1':
+            elif neighbour_addr == '131.231.115.169:1':
                 n = n1
-            elif neighbour_addr == '131.231.114.30:3':
+            elif neighbour_addr == '131.231.114.104:1':
                 n = n3
 
     going = True
@@ -171,7 +171,7 @@ def control_strategy():
     host_num = 2
     reliability = Full_reliability()
     checksum = Checksum()
-
+    msg_dict = {}
     while going:
         signal.signal(signal.SIGINT,handler)
         r= my_host.orfd(fd,timeout=0.5)
@@ -185,9 +185,10 @@ def control_strategy():
                 tries += 1
             else:#resent more than 5 times then drop data
                 semd_data = {}
+                msg_dict = {}
 
         if r == FD_READY:
-            x.addline('FD')
+            #x.addline('FD')
             line = os.read(fd,300)
 
             packet_list,len_of_last_msg = reliability.encapsulate(line)
@@ -203,7 +204,7 @@ def control_strategy():
 	            	going = False
 
         if r == NET_READY:
-            x.addline('NET')
+            #x.addline('NET')
             line,source = my_host.receive()
             header = checksum.decapsulate(line[:2]) + forwarding.decapsulate(line[2]) + reliability.decapsulate(line[3:6]) #scrap the header from received msg
 
@@ -211,7 +212,7 @@ def control_strategy():
             end = header[25]
 
             len_msg = int(header[8:16],2)
-
+            seq = int(header[40:48],2)
             dest_host = int(header[20:24],2)
             source_host = int(header[16:20],2)
             unique_id = header[32:48]
@@ -228,9 +229,9 @@ def control_strategy():
                     neighbour_addr = forwarding.lookup(next)
                     if neighbour_addr == '131.231.114.82:1':
                         n = n2
-                    elif neighbour_addr == '131.231.115.80:1':
+                    elif neighbour_addr == '131.231.115.169:1':
                         n = n1
-                    elif neighbour_addr == '131.231.114.30:3':
+                    elif neighbour_addr == '131.231.114.104:1':
                         n = n3
                     my_host.send(n,line)
                     x.addline('forwarding')
@@ -249,10 +250,19 @@ def control_strategy():
                         x.addline('Corrupted data!')
                         continue
                     else:  #no curruption, normal state
-                        x.addline('them:'+line[6:6+len_msg])
+                        if end == '1':
+                            msg_dict.update({1:line[6:6+len_msg]})
+                            if seq == 0:
+                                x.addline('them:'+msg_dict[1])
+                            else:
+                                if len(msg_dict)==2:
+                                    x.addline('them:'+ msg_dict[0] + msg_dict[1])
+                                    msg_dict={}
+                        else:
+                            msg_dict.update({0:line[6:6+len_msg]})
                         reliability.unique_id_list.append(unique_id)
 
-                x.addline('received ack:'+header[24:32]+'###')
+                #x.addline('received ack:'+header[24:32]+'###')
                 if ack == '1':
                     if unique_id in send_data.keys():
                         send_data.pop(unique_id) #drop data
@@ -263,6 +273,6 @@ def control_strategy():
                         reliability.total_package_list = []
                 else: #send ack_packet
                     reliability.send_ack(line,n,my_host,source_host)
-                    x.addline('sent ack')
+                    #x.addline('sent ack')
 
 control_strategy()
